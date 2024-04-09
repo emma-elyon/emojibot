@@ -6,6 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+emojis = "0.6.1"
 reqwest = "0.12.3"
 serenity = "0.12.1"
 tempfile = "3.10.1"

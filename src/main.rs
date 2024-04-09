@@ -49,6 +49,15 @@ impl EventHandler for Handler {
 				eprintln!("Error sending message: {error:?}");
 			}
 		} else {
+			let shortcodes = msg
+				.content
+				.replace(" ", "")
+				.graphemes(true)
+				.map(|g| {
+					emojis::get(g).and_then(|e| e.shortcode())
+				})
+				.collect::<Vec<Option<&str>>>();
+
 			let code_points = msg
 				.content
 				.replace(" ", "")
@@ -70,16 +79,53 @@ impl EventHandler for Handler {
 				)
 				.collect::<Vec<_>>();
 
+			let guild_id = msg.guild_id.unwrap();
 			if let [first, last] = &code_points[..] {
-				let guild_id = msg.guild_id.unwrap();
+				let mut emojis = guild_id.emojis(&ctx.http).await.expect("Could not fetch emojis.");
+				if emojis.len() == 50 {
+					emojis.sort_by(|a, b| {
+						a.id.cmp(&b.id)
+					});
+					let emoji = emojis.first().unwrap();
+					guild_id.delete_emoji(&ctx.http, emoji.id).await.expect("Could not delete emoji.");
+					emojis = guild_id.emojis(&ctx.http).await.expect("Could not fetch emojis.");
+				}
+				for emoji in emojis {
+					let emoji_name = if let [Some(short_first), Some(short_last)] = &shortcodes[..] {
+						format!("{short_first}_{short_last}")
+					} else {
+						format!("{first}_{last}").replace("-", "_")
+					};
+					if emoji.name == emoji_name {
+						let emoji_id = emoji.id;
+						msg.channel_id.say(&ctx.http, format!("<:{emoji_name}:{emoji_id}>")).await.expect("Could not send emoji message.");
+						msg.channel_id.say(&ctx.http, format!(":{emoji_name}:")).await.expect("Could not send emoji shortcode.");
+						return;
+					} else {
+						let emoji_name = if let [Some(short_first), Some(short_last)] = &shortcodes[..] {
+							format!("{short_last}_{short_first}")
+						} else {
+							format!("{last}_{first}").replace("-", "_")
+						};
+						if emoji.name == emoji_name {
+							let emoji_id = emoji.id;
+							msg.channel_id.say(&ctx.http, format!("<:{emoji_name}:{emoji_id}>")).await.expect("Could not send emoji message.");
+							msg.channel_id.say(&ctx.http, format!(":{emoji_name}:")).await.expect("Could not send emoji shortcode.");
+							return;
+						}
+					}
+				}
 				for revision in GSTATIC_REVISIONS {
 					let target = format!("{GSTATIC_PREFIX}{revision}/{first}/{first}_{last}.png");
-					let response = reqwest::get(target.clone()).await.expect("Could not fetch file.");
+					let response = reqwest::get(target.clone()).await.expect("Could not fetch png.");
 					let status = response.status();
 					if status.is_success() {
 						let content = response.bytes().await.expect("Could not get bytes from response.");
-						let guild_id = msg.guild_id.unwrap();
-						let emoji_name = format!("{first}_{last}").replace("-", "_");
+						let emoji_name = if let [Some(short_first), Some(short_last)] = &shortcodes[..] {
+							format!("{short_first}_{short_last}")
+						} else {
+							format!("{first}_{last}").replace("-", "_")
+						};
 						let image = CreateAttachment::bytes(content, &emoji_name).to_base64();
 						let emoji = guild_id.create_emoji(&ctx.http, &emoji_name, &image).await.expect("Could not create emoji on server.");
 						let emoji_id = emoji.id;
@@ -92,7 +138,11 @@ impl EventHandler for Handler {
 						let status = response.status();
 						if status.is_success() {
 							let content = response.bytes().await.expect("Could not get bytes from response.");
-							let emoji_name = format!("{first}_{last}").replace("-", "_");
+							let emoji_name = if let [Some(short_first), Some(short_last)] = &shortcodes[..] {
+								format!("{short_last}_{short_first}")
+							} else {
+								format!("{last}_{first}").replace("-", "_")
+							};
 							let image = CreateAttachment::bytes(content, &emoji_name).to_base64();
 							let emoji = guild_id.create_emoji(&ctx.http, &emoji_name, &image).await.expect("Could not create emoji on server.");
 							let emoji_id = emoji.id;
@@ -100,6 +150,21 @@ impl EventHandler for Handler {
 							msg.channel_id.say(&ctx.http, format!(":{emoji_name}:")).await.expect("Could not send emoji shortcode.");
 							return;
 						}
+					}
+				}
+				msg.channel_id.say(&ctx.http, format!("No combination")).await.expect("Could not send unsuccessful message.");
+			} else if msg.attachments.len() > 0 {
+				for attachment in msg.attachments {
+					let target = attachment.url;
+					let response = reqwest::get(target.clone()).await.expect("Could not fetch attachment.");
+					let status = response.status();
+					if status.is_success() {
+						let content = response.bytes().await.expect("Could not get bytes from response.");
+						let file_name = std::path::Path::new(&attachment.filename);
+						let emoji_name = file_name.file_stem().unwrap().to_string_lossy().to_ascii_lowercase().replace(|c| !char::is_alphanumeric(c), "_");
+						let image = CreateAttachment::bytes(content, &emoji_name).to_base64();
+						guild_id.create_emoji(&ctx.http, &emoji_name, &image).await.expect("Could not create emoji on server.");
+						msg.channel_id.say(&ctx.http, format!(":{emoji_name}:")).await.expect("Could not send emoji shortcode.");
 					}
 				}
 			}
