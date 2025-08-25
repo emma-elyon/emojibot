@@ -9,6 +9,7 @@ sticker as an emoji to a discord server.
   the gstatic server 27×2 times (worst case) before returning
 * Allow entering a custom emoji name after the two emojis to combine
 * Allow entering a custom emoji name along with an attached image to convert
+* Filter out "not found" emoji from vercel.
 
 ## Done
 
@@ -20,7 +21,3 @@ sticker as an emoji to a discord server.
 ## Emoji shortcode
 
 https://api.github.com/emojis
-
-## gstatic revisions
-
-https://git.emoji.supply/kitchen/emojidata.js
