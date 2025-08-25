@@ -8,36 +8,7 @@ use serenity::async_trait;
 use serenity::model::channel::Message;
 use serenity::prelude::*;
 
-const GSTATIC_PREFIX: &str = "https://www.gstatic.com/android/keyboard/emojikitchen/";
-const GSTATIC_REVISIONS: [&str; 27] = [
-	"20231113",
-	"20201001",
-	"20230418",
-	"20230803",
-	"20211115",
-	"20230301",
-	"20220815",
-	"20230127",
-	"20220203",
-	"20221101",
-	"20210831",
-	"20220506",
-	"20220406",
-	"20210218",
-	"20230126",
-	"20231128",
-	"20230821",
-	"20230216",
-	"20220110",
-	"20221107",
-	"20210521",
-	"20230818",
-	"20230426",
-	"20230421",
-	"20220823",
-	"20230221",
-	"20230613"
-];
+const API_PREFIX: &str = "https://emojik.vercel.app/s/";
 
 struct Handler;
 
@@ -115,16 +86,32 @@ impl EventHandler for Handler {
 						}
 					}
 				}
-				for revision in GSTATIC_REVISIONS {
-					let target = format!("{GSTATIC_PREFIX}{revision}/{first}/{first}_{last}.png");
+				let target = format!("{API_PREFIX}/{first}_{last}");
+				let response = reqwest::get(target.clone()).await.expect("Could not fetch png.");
+				let status = response.status();
+				if status.is_success() {
+					let content = response.bytes().await.expect("Could not get bytes from response.");
+					let emoji_name = if let [Some(short_first), Some(short_last)] = &shortcodes[..] {
+						format!("{short_first}_{short_last}")
+					} else {
+						format!("{first}_{last}").replace("-", "_")
+					};
+					let image = CreateAttachment::bytes(content, &emoji_name).to_base64();
+					let emoji = guild_id.create_emoji(&ctx.http, &emoji_name, &image).await.expect("Could not create emoji on server.");
+					let emoji_id = emoji.id;
+					msg.channel_id.say(&ctx.http, format!("<:{emoji_name}:{emoji_id}>")).await.expect("Could not send emoji message.");
+					msg.channel_id.say(&ctx.http, format!(":{emoji_name}:")).await.expect("Could not send emoji shortcode.");
+					return;
+				} else {
+					let target = format!("{API_PREFIX}/{last}_{first}");
 					let response = reqwest::get(target.clone()).await.expect("Could not fetch png.");
 					let status = response.status();
 					if status.is_success() {
 						let content = response.bytes().await.expect("Could not get bytes from response.");
 						let emoji_name = if let [Some(short_first), Some(short_last)] = &shortcodes[..] {
-							format!("{short_first}_{short_last}")
+							format!("{short_last}_{short_first}")
 						} else {
-							format!("{first}_{last}").replace("-", "_")
+							format!("{last}_{first}").replace("-", "_")
 						};
 						let image = CreateAttachment::bytes(content, &emoji_name).to_base64();
 						let emoji = guild_id.create_emoji(&ctx.http, &emoji_name, &image).await.expect("Could not create emoji on server.");
@@ -132,24 +119,6 @@ impl EventHandler for Handler {
 						msg.channel_id.say(&ctx.http, format!("<:{emoji_name}:{emoji_id}>")).await.expect("Could not send emoji message.");
 						msg.channel_id.say(&ctx.http, format!(":{emoji_name}:")).await.expect("Could not send emoji shortcode.");
 						return;
-					} else {
-						let target = format!("{GSTATIC_PREFIX}{revision}/{last}/{last}_{first}.png");
-						let response = reqwest::get(target.clone()).await.expect("Could not fetch file.");
-						let status = response.status();
-						if status.is_success() {
-							let content = response.bytes().await.expect("Could not get bytes from response.");
-							let emoji_name = if let [Some(short_first), Some(short_last)] = &shortcodes[..] {
-								format!("{short_last}_{short_first}")
-							} else {
-								format!("{last}_{first}").replace("-", "_")
-							};
-							let image = CreateAttachment::bytes(content, &emoji_name).to_base64();
-							let emoji = guild_id.create_emoji(&ctx.http, &emoji_name, &image).await.expect("Could not create emoji on server.");
-							let emoji_id = emoji.id;
-							msg.channel_id.say(&ctx.http, format!("<:{emoji_name}:{emoji_id}>")).await.expect("Could not send emoji message.");
-							msg.channel_id.say(&ctx.http, format!(":{emoji_name}:")).await.expect("Could not send emoji shortcode.");
-							return;
-						}
 					}
 				}
 				msg.channel_id.say(&ctx.http, format!("No combination")).await.expect("Could not send unsuccessful message.");
