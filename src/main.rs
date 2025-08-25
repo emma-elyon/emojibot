@@ -44,9 +44,9 @@ impl EventHandler for Handler {
 						.skip(3)
 						.collect::<String>()
 					)
-					.map(|s| format!("u{}", &s[..s.len() - 1]))
+					.map(|s| format!("{}", &s[..s.len() - 1]))
 					.collect::<Vec<_>>()
-					.join("-")
+					.join("_")
 				)
 				.collect::<Vec<_>>();
 
